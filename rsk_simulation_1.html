@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RSK Growth — 2D Lattice</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Playfair+Display:ital,wght@0,700;1,400&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --panel: #111118;
+    --panel2: #161620;
+    --border: #1e1e2e;
+    --border-hi: #2a2a3e;
+    --accent: #7c6aff;
+    --accent2: #ff6a8a;
+    --accent3: #6affa0;
+    --accent4: #ffd76a;
+    --text: #c8c8e0;
+    --dim: #666680;
+    --cell-bg: #16161f;
+    --cell-fill: #7c6aff;
+    --cell-grow: #6affa0;
+    --cell-new: #ff6a8a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 16px 24px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.3rem;
+    color: #fff;
+    letter-spacing: -0.5px;
+  }
+  header h1 em { color: var(--accent); font-style: italic; }
+  header p { font-size: 0.65rem; color: var(--dim); letter-spacing: 0.05em; }
+  .formula {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--dim);
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    margin-left: auto;
+  }
+  .formula span.hl { color: var(--accent); }
+
+  .main { display: flex; flex: 1; min-height: 0; }
+
+  .sidebar {
+    width: 260px;
+    border-right: 1px solid var(--border);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  .section-label {
+    font-size: 0.58rem;
+    letter-spacing: 0.15em;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .control { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+  .control label { font-size: 0.64rem; color: var(--dim); }
+  .control input[type=range] {
+    width: 100%; accent-color: var(--accent);
+    height: 3px; cursor: pointer;
+  }
+  .control .val { font-size: 0.7rem; color: var(--accent); text-align: right; }
+
+  button {
+    background: none;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    padding: 6px 10px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+  button:hover:not(:disabled) { background: var(--accent); color: #fff; }
+  button:disabled { opacity: 0.3; cursor: not-allowed; }
+  button.danger { border-color: var(--accent2); color: var(--accent2); }
+  button.danger:hover:not(:disabled) { background: var(--accent2); color: #fff; }
+  button.go { border-color: var(--accent3); color: var(--accent3); }
+  button.go:hover:not(:disabled) { background: var(--accent3); color: #0a0a0f; }
+
+  .btn-row { display: flex; gap: 5px; flex-wrap: wrap; }
+  .separator { height: 1px; background: var(--border); margin: 2px 0; }
+
+  .stats {
+    background: var(--cell-bg);
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    font-size: 0.64rem;
+    line-height: 1.7;
+  }
+  .stat-line { display: flex; justify-content: space-between; }
+  .stat-val { color: var(--accent); }
+
+  .legend { display: flex; flex-direction: column; gap: 4px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.6rem; color: var(--dim); }
+  .legend-box { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  .content {
+    flex: 1;
+    padding: 20px;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .lattice-wrapper {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 16px;
+    overflow: auto;
+  }
+
+  .lattice-title {
+    font-size: 0.68rem;
+    color: var(--text);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .lattice-title span.t { color: var(--accent); font-weight: 600; }
+  .lattice-title span.diag { color: var(--accent2); }
+
+  /* 2D lattice grid */
+  .lattice {
+    display: grid;
+    gap: 4px;
+    font-size: 0.55rem;
+  }
+
+  .lattice-cell {
+    background: var(--cell-bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 4px;
+    min-width: 70px;
+    min-height: 70px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: relative;
+    transition: all 0.25s ease;
+  }
+
+  .lattice-cell.boundary {
+    background: transparent;
+    border-color: var(--border);
+    opacity: 0.35;
+  }
+
+  .lattice-cell.filled {
+    background: var(--panel2);
+  }
+
+  .lattice-cell.active-diag {
+    border-color: var(--accent2);
+    box-shadow: 0 0 14px rgba(255,106,138,0.25);
+    animation: diag-pulse 0.6s ease-out;
+  }
+
+  @keyframes diag-pulse {
+    0%   { transform: scale(0.85); box-shadow: 0 0 0 rgba(255,106,138,0); }
+    50%  { transform: scale(1.04); box-shadow: 0 0 22px rgba(255,106,138,0.5); }
+    100% { transform: scale(1);    box-shadow: 0 0 14px rgba(255,106,138,0.25); }
+  }
+
+  .cell-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.52rem;
+    color: var(--dim);
+  }
+  .cell-header .coord { color: var(--accent); }
+  .cell-header .w { color: var(--accent2); }
+
+  .cell-lam {
+    font-size: 0.55rem;
+    color: var(--text);
+    line-height: 1.3;
+    margin-top: 1px;
+  }
+
+  .young-mini {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-top: auto;
+  }
+  .young-mini-row { display: flex; gap: 1px; }
+  .young-box {
+    width: 6px; height: 6px;
+    border-radius: 1px;
+  }
+  .young-box.existing { background: var(--cell-fill); opacity: 0.55; }
+  .young-box.grown { background: var(--cell-grow); }
+  .young-box.new-row { background: var(--cell-new); }
+
+  .auto-status { font-size: 0.6rem; color: var(--dim); text-align: center; min-height: 1em; }
+  .pulse { animation: blink 1s infinite; color: var(--accent3); }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .error-banner {
+    background: rgba(255,106,138,0.15);
+    border: 1px solid var(--accent2);
+    color: var(--accent2);
+    padding: 8px;
+    font-size: 0.65rem;
+    display: none;
+  }
+
+  .axis-label {
+    font-size: 0.55rem;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+  }
+
+  .axis-corner {
+    background: transparent;
+    border: none;
+    min-width: 70px;
+    min-height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.55rem;
+    color: var(--dim);
+  }
+
+  .j-header {
+    background: transparent;
+    border: none;
+    min-height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+
+  .i-header {
+    background: transparent;
+    border: none;
+    min-width: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+
+  .help-text {
+    font-size: 0.58rem;
+    color: var(--dim);
+    line-height: 1.6;
+    padding: 8px;
+    background: var(--cell-bg);
+    border-radius: 2px;
+  }
+  .help-text code {
+    color: var(--accent);
+    font-size: 0.55rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>RSK <em>Growth</em> on the 2D Lattice</h1>
+    <p>λ(i,j) via eq. (1) · W(i,j) ~ Geom(<span id="q-display">0.50</span>)</p>
+  </div>
+  <div class="formula">
+    κ₁ = max(λ₁,μ₁) + <span class="hl">W</span>  ·  κᵢ = max(λᵢ,μᵢ) + min(λᵢ₋₁,μᵢ₋₁) − τᵢ₋₁
+  </div>
+</header>
+
+<div class="main">
+  <div class="sidebar">
+    <div id="err-banner" class="error-banner"></div>
+
+    <div>
+      <div class="section-label">Parameters</div>
+      <div class="control">
+        <label>Max time T</label>
+        <input type="range" id="maxT" min="2" max="10" value="6">
+        <div class="val" id="maxT-label">6</div>
+      </div>
+      <div class="control">
+        <label>Lattice size N</label>
+        <input type="range" id="gridN" min="2" max="8" value="5">
+        <div class="val" id="gridN-label">5</div>
+      </div>
+      <div class="control">
+        <label>Geometric param q (success prob)</label>
+        <input type="range" id="qParam" min="0.05" max="0.95" step="0.01" value="0.5">
+        <div class="val" id="qParam-label">0.50</div>
+      </div>
+      <div class="control">
+        <label>Auto speed (ms)</label>
+        <input type="range" id="speed" min="300" max="2500" step="100" value="900">
+        <div class="val" id="speed-label">900</div>
+      </div>
+    </div>
+
+    <div class="separator"></div>
+
+    <div>
+      <div class="section-label">Controls</div>
+      <div class="btn-row">
+        <button class="go" id="btn-new" type="button">↺ New W</button>
+        <button id="btn-step" type="button">Step →</button>
+      </div>
+      <div class="btn-row" style="margin-top:5px">
+        <button id="btn-auto" type="button">▶ Auto</button>
+        <button class="danger" id="btn-reset" type="button">Reset</button>
+      </div>
+      <div class="auto-status" id="auto-status"></div>
+    </div>
+
+    <div class="separator"></div>
+
+    <div class="stats">
+      <div class="section-label">State</div>
+      <div class="stat-line"><span>time t</span><span class="stat-val" id="st-t">0</span></div>
+      <div class="stat-line"><span>filled</span><span class="stat-val" id="st-filled">0</span></div>
+      <div class="stat-line"><span>peak |λ|</span><span class="stat-val" id="st-peak">0</span></div>
+    </div>
+
+    <div>
+      <div class="section-label">Legend</div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-box" style="background:var(--cell-fill);opacity:0.55"></div>existing cells</div>
+        <div class="legend-item"><div class="legend-box" style="background:var(--cell-grow)"></div>grown from neighbors</div>
+        <div class="legend-item"><div class="legend-box" style="background:var(--cell-new)"></div>new row added</div>
+        <div class="legend-item"><div class="legend-box" style="background:transparent;border:1px solid var(--accent2)"></div>just computed (this t)</div>
+      </div>
+    </div>
+
+    <div class="help-text">
+      At each time <code>t</code>, the anti-diagonal <code>{(i,j): i+j=t}</code> is filled using eq.&nbsp;(1) from the three neighbors <code>τ=λ(i−1,j−1)</code>, <code>λ=λ(i−1,j)</code>, <code>μ=λ(i,j−1)</code> plus <code>W(i,j)</code>.
+    </div>
+  </div>
+
+  <div class="content" id="content">
+    <!-- dynamic -->
+  </div>
+</div>
+
+<script>
+'use strict';
+
+function showError(msg) {
+  const banner = document.getElementById('err-banner');
+  if (banner) { banner.textContent = 'Error: ' + msg; banner.style.display = 'block'; }
+  console.error(msg);
+}
+
+// ========== Math: eq. (1) exactly ==========
+
+function geom(q) {
+  // Geometric on {0,1,2,...}: P(X=k) = (1-q)^k * q
+  // q = success probability. Small q -> large W values, big q -> mostly zeros.
+  // Sample by inverse-CDF for efficiency and to avoid infinite loops near q=0.
+  if (q >= 1) return 0;
+  if (q <= 0) q = 0.01;
+  const u = Math.random();
+  // P(X <= k) = 1 - (1-q)^{k+1}  =>  k = floor( log(1-u) / log(1-q) )
+  const k = Math.floor(Math.log(1 - u) / Math.log(1 - q));
+  return Math.max(0, k);
+}
+
+function normalize(lam) {
+  const out = [];
+  for (const v of lam) if (v > 0) out.push(v);
+  return out;
+}
+function part_i(lam, i) {
+  // 1-indexed access: part_i(lam, 1) = lam[0]
+  return (i >= 1 && i <= lam.length) ? lam[i-1] : 0;
+}
+
+// Eq. (1):
+// κ_1 = max(λ_1, μ_1) + W
+// κ_i = max(λ_i, μ_i) + min(λ_{i-1}, μ_{i-1}) - τ_{i-1}   for i > 1
+// Here λ = λ(i-1,j), μ = λ(i,j-1), τ = λ(i-1,j-1), W = W(i,j)
+function kappa(tau, lam, mu, W) {
+  const maxLen = Math.max(lam.length, mu.length) + 1;
+  const k = [];
+  for (let i = 1; i <= maxLen; i++) {
+    if (i === 1) {
+      k.push(Math.max(part_i(lam, 1), part_i(mu, 1)) + W);
+    } else {
+      const val = Math.max(part_i(lam, i), part_i(mu, i))
+                + Math.min(part_i(lam, i-1), part_i(mu, i-1))
+                - part_i(tau, i-1);
+      k.push(Math.max(0, val));
+    }
+  }
+  return normalize(k);
+}
+
+// ========== State ==========
+
+const state = {
+  W: null,          // W[i][j] 1-indexed
+  N: 5,
+  T: 6,
+  q: 0.5,
+  currentT: 0,
+  lam: null,        // lam[i][j] partition at lattice point (i,j); null if not yet filled
+  prevLam: null,    // snapshot of lam before last step (for highlighting grown cells)
+  lastFilledDiag: -1,
+  autoTimer: null,
+};
+
+function readParams() {
+  state.T = parseInt(document.getElementById('maxT').value, 10);
+  state.N = parseInt(document.getElementById('gridN').value, 10);
+  state.q = parseFloat(document.getElementById('qParam').value);
+}
+
+function generateW() {
+  readParams();
+  const size = Math.max(state.N, state.T) + 1;
+  state.W = [];
+  for (let i = 0; i <= size; i++) {
+    state.W[i] = [];
+    for (let j = 0; j <= size; j++) {
+      state.W[i][j] = geom(state.q);
+    }
+  }
+  resetSim();
+}
+
+function resetSim() {
+  stopAuto();
+  state.currentT = 0;
+  state.lastFilledDiag = 0;
+  const size = state.W.length;
+  state.lam = [];
+  state.prevLam = [];
+  for (let i = 0; i < size; i++) {
+    state.lam[i] = new Array(size).fill(null);
+    state.prevLam[i] = new Array(size).fill(null);
+  }
+  // Boundary condition: λ(i, 0) = λ(0, j) = ∅
+  for (let i = 0; i < size; i++) { state.lam[i][0] = []; state.prevLam[i][0] = []; }
+  for (let j = 0; j < size; j++) { state.lam[0][j] = []; state.prevLam[0][j] = []; }
+  render();
+}
+
+function step() {
+  if (!state.W) { generateW(); return; }
+  readParams();
+  if (state.currentT >= state.T) return;
+  state.currentT++;
+  const t = state.currentT;
+
+  // Snapshot previous state for diff highlighting
+  const size = state.W.length;
+  for (let i = 0; i < size; i++) {
+    for (let j = 0; j < size; j++) {
+      state.prevLam[i][j] = state.lam[i][j];
+    }
+  }
+
+  // Fill in λ(i,j) for all (i,j) with i+j = t, 1 <= i, j <= N
+  for (let i = 1; i <= Math.min(t, state.N); i++) {
+    const j = t - i;
+    if (j < 1 || j > state.N) continue;
+    const tau = state.lam[i-1][j-1] || [];
+    const lam = state.lam[i-1][j] || [];
+    const mu  = state.lam[i][j-1] || [];
+    const W   = state.W[i][j];
+    state.lam[i][j] = kappa(tau, lam, mu, W);
+  }
+  state.lastFilledDiag = t;
+  render();
+}
+
+// ========== Render: show full 2D lattice ==========
+
+function partitionStr(p) {
+  if (!p || p.length === 0) return '∅';
+  return '(' + p.join(',') + ')';
+}
+
+function computeCellChanges(prev, curr) {
+  const changes = [];
+  if (!curr) return changes;
+  const prevArr = prev || [];
+  for (let r = 0; r < curr.length; r++) {
+    const prevLen = r < prevArr.length ? prevArr[r] : 0;
+    for (let c = prevLen; c < curr[r]; c++) {
+      changes.push({ row: r, col: c, type: r >= prevArr.length ? 'new-row' : 'grown' });
+    }
+  }
+  return changes;
+}
+
+function render() {
+  try {
+    const content = document.getElementById('content');
+    if (!content) { showError('content missing'); return; }
+    while (content.firstChild) content.removeChild(content.firstChild);
+
+    if (!state.W) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'text-align:center;padding:60px;color:var(--dim);font-size:0.75rem';
+      empty.textContent = 'Press ↺ New W to begin';
+      content.appendChild(empty);
+      return;
+    }
+
+    // Title
+    const title = document.createElement('div');
+    title.className = 'lattice-title';
+    const diagText = state.currentT > 0
+      ? ' · just filled anti-diagonal <span class="diag">i+j = ' + state.currentT + '</span>'
+      : ' · (boundary only — press Step)';
+    title.innerHTML = 'Lattice of partitions λ(i,j) at <span class="t">t = ' + state.currentT + '</span>' + diagText;
+    content.appendChild(title);
+
+    // Build the lattice display. We want j going right, i going down.
+    // Use CSS grid with (N+2) columns: 1 for i-header + (N+1) for j=0..N
+    const wrapper = document.createElement('div');
+    wrapper.className = 'lattice-wrapper';
+    const lattice = document.createElement('div');
+    lattice.className = 'lattice';
+    const N = state.N;
+    lattice.style.gridTemplateColumns = 'auto repeat(' + (N+1) + ', auto)';
+
+    // Top-left corner
+    const corner = document.createElement('div');
+    corner.className = 'axis-corner';
+    corner.textContent = 'i ↓ / j →';
+    lattice.appendChild(corner);
+
+    // j-column headers
+    for (let j = 0; j <= N; j++) {
+      const h = document.createElement('div');
+      h.className = 'j-header';
+      h.textContent = 'j=' + j;
+      lattice.appendChild(h);
+    }
+
+    // Rows
+    for (let i = 0; i <= N; i++) {
+      // i-header
+      const h = document.createElement('div');
+      h.className = 'i-header';
+      h.textContent = 'i=' + i;
+      lattice.appendChild(h);
+
+      // Cells
+      for (let j = 0; j <= N; j++) {
+        lattice.appendChild(renderLatticeCell(i, j));
+      }
+    }
+
+    wrapper.appendChild(lattice);
+    content.appendChild(wrapper);
+
+    updateStats();
+    updateButtons();
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+function renderLatticeCell(i, j) {
+  const cell = document.createElement('div');
+  cell.className = 'lattice-cell';
+
+  const isBoundary = (i === 0 || j === 0);
+  const lam = state.lam[i][j];
+  const prevLam = state.prevLam[i][j];
+  const filled = lam !== null;
+  const onActiveDiag = (i + j === state.currentT && state.currentT > 0 && i >= 1 && j >= 1);
+
+  if (isBoundary) cell.classList.add('boundary');
+  if (filled && !isBoundary) cell.classList.add('filled');
+  if (onActiveDiag) cell.classList.add('active-diag');
+
+  // Header: coordinate + W
+  const header = document.createElement('div');
+  header.className = 'cell-header';
+  const coord = document.createElement('span');
+  coord.className = 'coord';
+  coord.textContent = '(' + i + ',' + j + ')';
+  header.appendChild(coord);
+  if (!isBoundary && state.W) {
+    const w = document.createElement('span');
+    w.className = 'w';
+    w.textContent = 'W=' + state.W[i][j];
+    header.appendChild(w);
+  }
+  cell.appendChild(header);
+
+  // Partition as text
+  const lamText = document.createElement('div');
+  lamText.className = 'cell-lam';
+  if (filled) {
+    lamText.textContent = 'λ = ' + partitionStr(lam);
+  } else {
+    lamText.textContent = '—';
+    lamText.style.color = 'var(--dim)';
+  }
+  cell.appendChild(lamText);
+
+  // Young diagram (mini)
+  if (filled && lam.length > 0) {
+    const changes = onActiveDiag ? computeCellChanges(prevLam, lam) : [];
+    const changeMap = {};
+    for (const c of changes) changeMap[c.row + ',' + c.col] = c.type;
+
+    const young = document.createElement('div');
+    young.className = 'young-mini';
+    for (let r = 0; r < lam.length; r++) {
+      const row = document.createElement('div');
+      row.className = 'young-mini-row';
+      for (let c = 0; c < lam[r]; c++) {
+        const box = document.createElement('div');
+        const key = r + ',' + c;
+        const type = changeMap[key] || 'existing';
+        box.className = 'young-box ' + type;
+        row.appendChild(box);
+      }
+      young.appendChild(row);
+    }
+    cell.appendChild(young);
+  }
+
+  return cell;
+}
+
+function updateStats() {
+  const elT = document.getElementById('st-t');
+  const elF = document.getElementById('st-filled');
+  const elP = document.getElementById('st-peak');
+  if (elT) elT.textContent = state.currentT;
+
+  let filled = 0, peak = 0;
+  for (let i = 1; i <= state.N; i++) {
+    for (let j = 1; j <= state.N; j++) {
+      if (state.lam[i][j] !== null) {
+        filled++;
+        const sz = state.lam[i][j].reduce((a,b) => a+b, 0);
+        if (sz > peak) peak = sz;
+      }
+    }
+  }
+  if (elF) elF.textContent = filled;
+  if (elP) elP.textContent = peak;
+}
+
+function updateButtons() {
+  const atEnd = state.currentT >= state.T;
+  const btnStep = document.getElementById('btn-step');
+  const btnAuto = document.getElementById('btn-auto');
+  if (btnStep) btnStep.disabled = !state.W || atEnd;
+  if (btnAuto) btnAuto.disabled = !state.W || (atEnd && !state.autoTimer);
+}
+
+// ========== Auto ==========
+
+function startAuto() {
+  if (state.autoTimer) return;
+  if (!state.W) generateW();
+  if (state.currentT >= state.T) return;
+  const speed = parseInt(document.getElementById('speed').value, 10);
+  const statusEl = document.getElementById('auto-status');
+  const btnAuto = document.getElementById('btn-auto');
+  if (statusEl) statusEl.innerHTML = '<span class="pulse">● auto-stepping</span>';
+  if (btnAuto) btnAuto.textContent = '⏸ Pause';
+  state.autoTimer = setInterval(function() {
+    if (state.currentT >= state.T) { stopAuto(); return; }
+    step();
+  }, speed);
+}
+
+function stopAuto() {
+  if (state.autoTimer) { clearInterval(state.autoTimer); state.autoTimer = null; }
+  const statusEl = document.getElementById('auto-status');
+  const btnAuto = document.getElementById('btn-auto');
+  if (statusEl) statusEl.textContent = '';
+  if (btnAuto) btnAuto.textContent = '▶ Auto';
+  updateButtons();
+}
+
+// ========== Wire up ==========
+
+function wireEvents() {
+  document.getElementById('btn-new').addEventListener('click', function() { stopAuto(); generateW(); });
+  document.getElementById('btn-step').addEventListener('click', function() { step(); });
+  document.getElementById('btn-reset').addEventListener('click', function() { if (state.W) resetSim(); });
+  document.getElementById('btn-auto').addEventListener('click', function() {
+    if (state.autoTimer) stopAuto(); else startAuto();
+  });
+  ['maxT','gridN','speed'].forEach(function(id) {
+    const el = document.getElementById(id);
+    const lbl = document.getElementById(id + '-label');
+    if (el && lbl) el.addEventListener('input', function() { lbl.textContent = el.value; });
+  });
+
+  // q slider: update labels live, and resample W on release so the lattice reflects the new distribution
+  const qEl = document.getElementById('qParam');
+  const qLbl = document.getElementById('qParam-label');
+  const qDisp = document.getElementById('q-display');
+  if (qEl && qLbl) {
+    qEl.addEventListener('input', function() {
+      const v = parseFloat(qEl.value).toFixed(2);
+      qLbl.textContent = v;
+      if (qDisp) qDisp.textContent = v;
+    });
+    qEl.addEventListener('change', function() {
+      // resample W with new q and reset the sim so the change is visible
+      stopAuto();
+      generateW();
+    });
+  }
+}
+
+function init() {
+  try { wireEvents(); generateW(); } catch (e) { showError(e.message); }
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();
+</script>
+</body>
+</html>
